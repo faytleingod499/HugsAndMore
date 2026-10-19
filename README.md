@@ -37,3 +37,14 @@ Needs [GDWeave](https://thunderstore.io/c/webfishing/p/NotNet/GDWeave/). Copy th
 ## Building
 `source/mods/HugsAndMore/` holds the scripts; `pack.gd` packs the `.pck` with Godot 3.5:
 `godot --no-window -s pack.gd`.
+
+## Building
+
+The mod is plain GDScript (plus models and sounds) packed into `package/HugsAndMore/HugsAndMore.pck` with the Godot 3.5 engine's own packer:
+
+```
+godot --no-window -s pack.gd
+./build.sh
+```
+
+`pack.gd` packs `source/mods/HugsAndMore/` into the pck. `build.sh` then makes `out/HugsAndMore-mod.zip` (the folder for `GDWeave/mods`) and the Thunderstore upload zip from `thunderstore/`. Requires [GDWeave](https://thunderstore.io/c/webfishing/p/NotNet/GDWeave/).

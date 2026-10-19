@@ -15,7 +15,7 @@ extends Node
 # Everything goes through the Steam lobby member data ("hugsandmore"), so every player with the mod sees
 # it. Players without the mod see nothing unusual.
 
-const VERSION = "1.2.7"
+const VERSION = "1.2.8"
 const SYNC_KEY = "hugsandmore"   # "1;<seq>;<ask|yes>;<emote>;<target steam id>;<the seq it answers>"
 const SKELETON_PATH = "body/player_body/Armature/Skeleton"
 const POPUP_ID = "HUGSANDMORE"
@@ -219,7 +219,10 @@ func _read_states(lobby, me):
 
 func _update_prompt(players, me):
 	prompt_target = 0
-	if players.has(me) and _hud_free() and not _busy(me) and picker_target == 0:
+	# Playground's hide and seek uses F for "Found!" right now: stay out of its way
+	var root = get_tree().root
+	var f_taken = root.has_meta("playground_f") and root.get_meta("playground_f") == true
+	if players.has(me) and _hud_free() and not _busy(me) and picker_target == 0 and not f_taken:
 		var here = players[me].global_transform.origin
 		var best = PROMPT_RANGE
 		for id in players.keys():

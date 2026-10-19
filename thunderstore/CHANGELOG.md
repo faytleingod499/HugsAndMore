@@ -1,3 +1,6 @@
+## 1.2.8
+- Works alongside Playground's Hide and Seek: the F  Interact prompt steps aside while Playground's "F  Found!" prompt is showing.
+
 ## 1.2.7
 - The mod has its own GitHub repository now: https://github.com/faytleingod499/HugsAndMore
 - Released under the MIT License: you're free to copy, change and share your own versions.

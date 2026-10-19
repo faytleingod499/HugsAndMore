@@ -1,3 +1,7 @@
+## 1.2.7
+- The mod has its own GitHub repository now: https://github.com/faytleingod499/HugsAndMore
+- Released under the MIT License: you're free to copy, change and share your own versions.
+
 ## 1.2.6
 - High five: you both step a little to the side so your heads pass each other instead of bumping, and your right hands meet in the middle.
 

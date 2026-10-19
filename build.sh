@@ -10,6 +10,7 @@ rm -f out/HugsAndMore-mod.zip out/HugsAndMore-$V.zip
 (cd package && zip -qr ../out/HugsAndMore-mod.zip HugsAndMore)
 T=$(mktemp -d)
 cp thunderstore/manifest.json thunderstore/README.md thunderstore/CHANGELOG.md thunderstore/icon.png $T/
+cp LICENSE $T/
 mkdir -p $T/GDWeave/mods/HugsAndMore
 cp package/HugsAndMore/manifest.json package/HugsAndMore/HugsAndMore.pck $T/GDWeave/mods/HugsAndMore/
 (cd $T && zip -qr - .) > out/HugsAndMore-$V.zip

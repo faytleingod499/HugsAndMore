@@ -15,7 +15,7 @@ extends Node
 # Everything goes through the Steam lobby member data ("hugsandmore"), so every player with the mod sees
 # it. Players without the mod see nothing unusual.
 
-const VERSION = "1.2.8"
+const VERSION = "1.2.9"
 const SYNC_KEY = "hugsandmore"   # "1;<seq>;<ask|yes>;<emote>;<target steam id>;<the seq it answers>"
 const SKELETON_PATH = "body/player_body/Armature/Skeleton"
 const POPUP_ID = "HUGSANDMORE"
@@ -73,6 +73,8 @@ var prompt_target = 0
 var picker
 var picker_title
 var picker_target = 0
+var picker_placed = false # it stays where it opened, so it can be clicked while the other player moves
+const INVITE_SCALE = 1.5  # requests are big and in the middle of the screen, so nobody misses them
 var locked_hud = null
 var invite_panel
 var invite_label
@@ -290,6 +292,7 @@ func _open_picker(target):
 	picker_target = target
 	picker_title.text = _name_of(target)
 	picker.visible = true
+	picker_placed = false
 	prompt.visible = false
 	_lock_hud()
 
@@ -310,7 +313,22 @@ func _update_picker(players, me):
 			or not _hud_free(true):
 		_close_picker()
 		return
-	_place_over(picker, players[picker_target], 0.15)
+	# placed over them once, when it opens; after that it stays put (it used to follow them and was hard to click)
+	if not picker_placed:
+		_place_over(picker, players[picker_target], 0.15)
+		if picker.visible:
+			picker_placed = true
+			var area = picker.get_viewport_rect().size
+			var size = picker.get_combined_minimum_size()
+			picker.rect_position = Vector2(clamp(picker.rect_position.x, 8, max(8, area.x - size.x - 8)),
+				clamp(picker.rect_position.y, 8, max(8, area.y - size.y - 8)))
+		else:
+			picker.visible = true # off screen or behind me: open in the middle instead
+			picker_placed = true
+			var area = picker.get_viewport_rect().size
+			picker.rect_size = Vector2()
+			var size = picker.get_combined_minimum_size()
+			picker.rect_position = (area - size) / 2.0
 
 
 func _on_pick(kind):
@@ -351,11 +369,18 @@ func _update_invite(me):
 		if from != 0:
 			invite_label.text = _name_of(from) + " " + EMOTES[kind]["ask"]
 			invite_yes.text = EMOTES[kind]["answer"] + " (Y)"
+			# a ping, so it's noticed even when looking elsewhere
+			var players = _players()
+			if players.has(me):
+				_game_sound(players[me], "notification", 1.0, null, players[me].global_transform.origin)
 	invite_panel.visible = invite_from != 0 and _hud_free()
 	if invite_panel.visible:
-		var size = invite_panel.get_viewport_rect().size
+		var area = invite_panel.get_viewport_rect().size
 		invite_panel.rect_size = Vector2()
-		invite_panel.rect_position = Vector2((size.x - invite_panel.rect_size.x) / 2.0, size.y * 0.18)
+		invite_panel.rect_scale = Vector2(INVITE_SCALE, INVITE_SCALE)
+		var size = invite_panel.get_combined_minimum_size() * INVITE_SCALE
+		# just above the middle of the screen, out of the way of the player but right in view
+		invite_panel.rect_position = Vector2(round((area.x - size.x) / 2.0), round(area.y * 0.36 - size.y / 2.0))
 
 
 func _on_invite_yes():
@@ -964,11 +989,14 @@ func _build_ui():
 	toast.anchor_bottom = 0.24
 	toast.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	toast.align = Label.ALIGN_CENTER
+	toast.rect_scale = Vector2(1.3, 1.3)
 	layer.add_child(toast)
 
 
 func _show_toast(text):
 	toast.text = text
+	toast.rect_size = Vector2()
+	toast.rect_pivot_offset = toast.get_combined_minimum_size() / 2.0 # grows from its middle
 	toast_until = clock + 3.0
 
 

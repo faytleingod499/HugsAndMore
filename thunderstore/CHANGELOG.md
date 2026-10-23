@@ -1,3 +1,9 @@
+## 1.2.9
+- Requests ("... wants a hug!") are 1.5 times bigger, sit just above the middle of the screen and ping when they arrive,
+  so they're hard to miss.
+- The hug / high five / kiss menu stays where it opened instead of following the other player, so it can be clicked
+  while they move.
+
 ## 1.2.8
 - Works alongside Playground's Hide and Seek: the F  Interact prompt steps aside while Playground's "F  Found!" prompt is showing.
 

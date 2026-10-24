@@ -22,6 +22,11 @@ Nobody gets hugged or high-fived without saying yes.
 Both fit any sizes: a small player hugs a big one around the middle, and a tall player reaches down for a
 small one's high five.
 
+## Addons
+
+Other mods can add emotes to the same menu, like [Alternate Poses](https://thunderstore.io/c/webfishing/p/Fayt/Alternate_Poses/)
+(side hug, hold hands, fist bump, twirl, bow). Those are only offered to players who have the addon too.
+
 ## Multiplayer
 
 Everyone with Hugs and More sees the emotes. Players without the mod don't see anything unusual. Works

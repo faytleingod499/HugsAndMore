@@ -34,6 +34,16 @@ Needs [GDWeave](https://thunderstore.io/c/webfishing/p/NotNet/GDWeave/). Copy th
   game's punch sound, pitched up, at the slap.
 - Adding an emote: an entry in `EMOTES` / `EMOTE_ORDER` and a `_pose_<name>` function.
 
+## For addon mods (API version 1)
+The node is published as the root meta `hugsandmore_api` (set in `_ready`, removed on exit). An addon calls
+`register_emote(id, def)` (and `unregister_emote(id)`), with `id` made of `a-z 0-9 _` (up to 24 characters) and
+`def = {label, ask, answer, time, node, method, needs, bones}`: `method` on `node` is called every frame as
+`method(p, hugs)` to draw the pose, `needs` is a lobby member data key the other player must have for the emote to be
+offered (the addon announces itself with it), `bones` are extra bone names the pose overrides, reset at the end. The
+helpers `_pair_frame`, `_place_body` (with an optional pivot to turn a pair about), `_reach`, `_tilt_head`,
+`_tilt_head_toward`, `_player_size`, `_shoulder_y`, `_head_y`, `_hearts`, `_game_sound`, `_facing` and `_flat` are meant
+to be used by addons. The first addon is [Alternate Poses](https://github.com/faytleingod499/AlternatePoses).
+
 ## Building
 `source/mods/HugsAndMore/` holds the scripts; `pack.gd` packs the `.pck` with Godot 3.5:
 `godot --no-window -s pack.gd`.

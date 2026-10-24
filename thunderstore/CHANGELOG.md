@@ -1,3 +1,8 @@
+## 1.3.0
+- Other mods can add emotes to the F menu now (the first one is the addon Alternate Poses). Nothing changes for you
+  without such an addon: the hug, high five and kiss work exactly as before.
+- An addon's emotes are only offered to players who have that addon too.
+
 ## 1.2.9
 - Requests ("... wants a hug!") are 1.5 times bigger, sit just above the middle of the screen and ping when they arrive,
   so they're hard to miss.

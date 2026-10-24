@@ -15,7 +15,9 @@ extends Node
 # Everything goes through the Steam lobby member data ("hugsandmore"), so every player with the mod sees
 # it. Players without the mod see nothing unusual.
 
-const VERSION = "1.2.9"
+const VERSION = "1.3.0"
+const API_VERSION = 1       # for addon mods, see register_emote below
+const API_META = "hugsandmore_api"   # root meta holding this node, so addons can find it
 const SYNC_KEY = "hugsandmore"   # "1;<seq>;<ask|yes>;<emote>;<target steam id>;<the seq it answers>"
 const SKELETON_PATH = "body/player_body/Armature/Skeleton"
 const POPUP_ID = "HUGSANDMORE"
@@ -30,6 +32,12 @@ const EMOTES = {
 	"highfive": {"label": "High five", "ask": "wants a high five!", "answer": "High five", "time": 1.5},
 	"kiss": {"label": "Kiss", "ask": "wants a kiss!", "answer": "Kiss", "time": 2.2},
 }
+
+# emotes added by other mods (see register_emote): id -> {label, ask, answer, time, node, method, needs, bones}
+var extra = {}
+var extra_order = []
+var picker_column
+var picker_buttons = []
 
 const ASK_TIME = 15.0      # an invitation is open this long
 const BLEND_TIME = 0.3     # easing in and out of a pose
@@ -96,9 +104,13 @@ func _ready():
 	if ResourceLoader.exists(HEARTS):
 		hearts_scene = load(HEARTS)
 	_build_ui()
+	get_tree().root.set_meta(API_META, self)
 
 
 func _exit_tree():
+	var root = get_tree().root if get_tree() != null else null
+	if root != null and root.has_meta(API_META) and root.get_meta(API_META) == self:
+		root.remove_meta(API_META)
 	_close_picker()
 	for key in pairs.keys():
 		_clear_pose(pairs[key])
@@ -160,6 +172,83 @@ func _players():
 	return out
 
 
+# --- for addon mods ---
+# An addon (e.g. AlternatePoses) finds this node with get_tree().root.get_meta("hugsandmore_api") and calls
+# register_emote(id, def). The emote then shows in the F picker, goes through the same invitation, and its
+# pose is drawn by calling def.node.<def.method>(p, hugs) every frame, where p is the running emote
+# ({emote, a, b, t, w, pa, pb, ending, ...}: pa and pb are the two player nodes, t the seconds it has run,
+# w the 0-1 blend; put your own values in p too) and hugs is this node, whose helpers (_pair_frame,
+# _place_body, _reach, _tilt_head, _tilt_head_toward, _player_size, _shoulder_y, _head_y, _hearts,
+# _game_sound, _facing, _flat) can be used for the pose.
+#   def = {"label": "Fist bump", "ask": "wants a fist bump!", "answer": "Bump", "time": 2.0,
+#          "node": <object>, "method": "pose_fist_bump",
+#          "needs": "<lobby member data key a player must have for the emote to be offered, or empty>",
+#          "bones": ["extra bone names your pose overrides and that must be reset at the end"]}
+# Returns true when registered. Emotes only ever run if both players have registered the same id.
+func register_emote(id, def):
+	id = str(id)
+	if not _valid_id(id) or EMOTES.has(id) or typeof(def) != TYPE_DICTIONARY:
+		return false
+	var node = def.get("node")
+	var method = str(def.get("method", ""))
+	if node == null or not is_instance_valid(node) or method == "" or not node.has_method(method):
+		return false
+	var entry = {
+		"label": str(def.get("label", id)).left(24),
+		"ask": str(def.get("ask", "wants to do something with you!")).left(60),
+		"answer": str(def.get("answer", "Join")).left(20),
+		"time": clamp(float(def.get("time", 3.0)), 0.5, 20.0),
+		"node": node, "method": method,
+		"needs": str(def.get("needs", "")).left(64),
+		"bones": def.get("bones", []) if typeof(def.get("bones", [])) == TYPE_ARRAY else [],
+	}
+	if not extra.has(id):
+		extra_order.append(id)
+	extra[id] = entry
+	print("[HugsAndMore] emote registered: ", id)
+	return true
+
+
+func unregister_emote(id):
+	extra.erase(str(id))
+	extra_order.erase(str(id))
+
+
+func _valid_id(id):
+	if id.length() < 1 or id.length() > 24:
+		return false
+	for i in range(id.length()):
+		var c = id.substr(i, 1)
+		if not (c >= "a" and c <= "z") and not (c >= "0" and c <= "9") and c != "_":
+			return false
+	return true
+
+
+# the definition of an emote by id, built in or added by an addon; null when this game doesn't know it
+func _emote(kind):
+	if EMOTES.has(kind):
+		return EMOTES[kind]
+	if extra.has(kind):
+		var e = extra[kind]
+		if is_instance_valid(e["node"]) and e["node"].has_method(e["method"]):
+			return e
+	return null
+
+
+# does a player have what the emote needs (an addon announces itself in the lobby)
+func _offered_to(kind, target):
+	var e = _emote(kind)
+	if e == null:
+		return false
+	var needs = e.get("needs", "")
+	if needs == "":
+		return true
+	var net = get_node_or_null("/root/Network")
+	if steam == null or net == null or net.PLAYING_OFFLINE or net.STEAM_LOBBY_ID <= 0 or not steam.has_method("getLobbyMemberData"):
+		return false
+	return str(steam.getLobbyMemberData(net.STEAM_LOBBY_ID, int(target), needs)) != ""
+
+
 # --- talking through the lobby ---
 
 func _set_state(action, emote, target, ref):
@@ -192,7 +281,7 @@ func _parse(text):
 	var bits = str(text).split(";")
 	if bits.size() < 6 or bits[0] != "1":
 		return null
-	return {"seq": int(bits[1]), "action": bits[2], "emote": bits[3], "target": int(bits[4]), "ref": int(bits[5])}
+	return {"seq": int(bits[1]), "action": bits[2], "emote": bits[3].left(24), "target": int(bits[4]), "ref": int(bits[5])}
 
 
 func _read_states(lobby, me):
@@ -291,10 +380,31 @@ func _input(event):
 func _open_picker(target):
 	picker_target = target
 	picker_title.text = _name_of(target)
+	_fill_picker(target)
 	picker.visible = true
 	picker_placed = false
 	prompt.visible = false
 	_lock_hud()
+
+
+# one button per emote that this player can be asked for
+func _fill_picker(target):
+	for b in picker_buttons:
+		if is_instance_valid(b):
+			picker_column.remove_child(b)
+			b.queue_free()
+	picker_buttons = []
+	for kind in EMOTE_ORDER + extra_order:
+		if not _offered_to(kind, target):
+			continue
+		var b = Button.new()
+		b.text = _emote(kind)["label"]
+		b.focus_mode = Control.FOCUS_NONE
+		b.connect("pressed", self, "_on_pick", [kind])
+		_glass_button(b)
+		picker_column.add_child(b)
+		picker_buttons.append(b)
+	picker.rect_size = Vector2()
 
 
 func _close_picker():
@@ -345,7 +455,7 @@ func _on_pick(kind):
 		return
 	_set_state("ask", kind, target, 0)
 	_flush_state()
-	_show_toast("Asked " + _name_of(target) + " for a " + EMOTES[kind]["label"].to_lower() + "...")
+	_show_toast("Asked " + _name_of(target) + ": " + _emote(kind)["label"].to_lower() + "...")
 
 
 # --- an invitation for me ---
@@ -356,7 +466,7 @@ func _update_invite(me):
 	var kind = ""
 	for id in states.keys():
 		var s = states[id]
-		if id != me and s["action"] == "ask" and EMOTES.has(s["emote"]) and s["target"] == me \
+		if id != me and s["action"] == "ask" and _emote(s["emote"]) != null and s["target"] == me \
 				and not answered.has(str(id) + "-" + str(s["seq"])) and not _busy(me) and not _busy(id):
 			from = id
 			seq = s["seq"]
@@ -367,8 +477,8 @@ func _update_invite(me):
 		invite_seq = seq
 		invite_emote = kind
 		if from != 0:
-			invite_label.text = _name_of(from) + " " + EMOTES[kind]["ask"]
-			invite_yes.text = EMOTES[kind]["answer"] + " (Y)"
+			invite_label.text = _name_of(from) + " " + _emote(kind)["ask"]
+			invite_yes.text = _emote(kind)["answer"] + " (Y)"
 			# a ping, so it's noticed even when looking elsewhere
 			var players = _players()
 			if players.has(me):
@@ -418,7 +528,7 @@ func _update_pairs(players, me, delta):
 	var wanted = {}
 	for a in states.keys():
 		var s = states[a]
-		if s["action"] != "ask" or not EMOTES.has(s["emote"]) or not states.has(s["target"]):
+		if s["action"] != "ask" or _emote(s["emote"]) == null or not states.has(s["target"]):
 			continue
 		var b = s["target"]
 		var t = states[b]
@@ -451,7 +561,7 @@ func _update_pairs(players, me, delta):
 		if not gone and not p["ending"]:
 			var moved = _flat(p["pa"].global_transform.origin - p["start_a"]).length() > MOVE_LIMIT \
 				or _flat(p["pb"].global_transform.origin - p["start_b"]).length() > MOVE_LIMIT
-			if moved or p["t"] > EMOTES[p["emote"]]["time"] or not wanted.has(key) and p["t"] > 1.0:
+			if moved or p["t"] > _time_of(p["emote"]) or not wanted.has(key) and p["t"] > 1.0:
 				p["ending"] = true
 				if p["a"] == me or p["b"] == me:
 					_set_state("", "", 0, 0)
@@ -464,7 +574,24 @@ func _update_pairs(players, me, delta):
 			_clear_pose(p)
 			pairs.erase(key)
 			continue
+		_draw_pose(p)
+
+
+func _time_of(kind):
+	var e = _emote(kind)
+	return e["time"] if e != null else 0.0
+
+
+# the pose of a running emote: a built-in one here, an addon's through the method it registered
+func _draw_pose(p):
+	if EMOTES.has(p["emote"]):
 		call("_pose_" + p["emote"], p)
+		return
+	var e = _emote(p["emote"])
+	if e == null:
+		p["ending"] = true
+		return
+	e["node"].call(e["method"], p, self)
 
 
 # anyone in a pair at all, even one easing out
@@ -484,7 +611,8 @@ func _flat(v):
 # (the pelvis) is turned to face the other and stepped to its place; arms reach with a two-bone reach.
 
 # turns and steps one body; returns what the arms need to know
-func _place_body(me_node, dir, mid, gap, sway, w):
+# (an addon can turn the pair about another point than mid by giving a pivot)
+func _place_body(me_node, dir, mid, gap, sway, w, pivot = null):
 	var sk = me_node.get_node_or_null(SKELETON_PATH)
 	if sk == null:
 		return null
@@ -498,7 +626,8 @@ func _place_body(me_node, dir, mid, gap, sway, w):
 	var spot = mid - dir * gap / 2.0
 	var move = Transform(Basis(), Vector3(spot.x - here.x, 0, spot.z - here.z))
 	var spin = Transform(Basis(), here) * Transform(Basis(Vector3.UP, turn), Vector3()) * Transform(Basis(), -here)
-	var swaying = Transform(Basis(), mid) * Transform(Basis(Vector3.UP, sway), Vector3()) * Transform(Basis(), -mid)
+	var about = mid if pivot == null else pivot
+	var swaying = Transform(Basis(), about) * Transform(Basis(Vector3.UP, sway), Vector3()) * Transform(Basis(), -about)
 	var rebase = W.affine_inverse() * swaying * move * spin * W   # my bones (skeleton space) to where they go now
 	sk.set_bone_global_pose_override(pelvis, rebase * sk.get_bone_global_pose_no_override(pelvis), w, true)
 	return {"sk": sk, "W": W, "Winv": W.affine_inverse(), "rebase": rebase, "spot": spot}
@@ -800,7 +929,13 @@ func _clear_pose(h):
 		var sk = node.get_node_or_null(SKELETON_PATH)
 		if sk == null:
 			continue
-		for name in ["pelvis", "torso", "head", "arm.l", "elbow.l", "arm.r", "elbow.r"]:
+		var names = ["pelvis", "torso", "head", "arm.l", "elbow.l", "arm.r", "elbow.r"]
+		var e = extra.get(str(h.get("emote", "")))
+		if e != null:
+			for more in e["bones"]:
+				if not names.has(str(more)):
+					names.append(str(more))
+		for name in names:
 			var bone = sk.find_bone(name)
 			if bone >= 0:
 				sk.set_bone_global_pose_override(bone, Transform(), 0.0, true)
@@ -926,6 +1061,7 @@ func _build_ui():
 	column.add_constant_override("separation", 4)
 	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	margin.add_child(column)
+	picker_column = column
 	var head = HBoxContainer.new()
 	head.add_constant_override("separation", 8)
 	column.add_child(head)
@@ -939,13 +1075,7 @@ func _build_ui():
 	close.connect("pressed", self, "_close_picker")
 	_glass_button(close)
 	head.add_child(close)
-	for kind in EMOTE_ORDER:
-		var b = Button.new()
-		b.text = EMOTES[kind]["label"]
-		b.focus_mode = Control.FOCUS_NONE
-		b.connect("pressed", self, "_on_pick", [kind])
-		_glass_button(b)
-		column.add_child(b)
+	# the emote buttons are added when the picker opens (_fill_picker), as addons can add more
 
 	# the invitation
 	invite_panel = PanelContainer.new()

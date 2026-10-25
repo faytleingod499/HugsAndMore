@@ -15,8 +15,8 @@ extends Node
 # Everything goes through the Steam lobby member data ("hugsandmore"), so every player with the mod sees
 # it. Players without the mod see nothing unusual.
 
-const VERSION = "1.3.0"
-const API_VERSION = 1       # for addon mods, see register_emote below
+const VERSION = "1.3.1"
+const API_VERSION = 2       # for addon mods, see register_emote below
 const API_META = "hugsandmore_api"   # root meta holding this node, so addons can find it
 const SYNC_KEY = "hugsandmore"   # "1;<seq>;<ask|yes>;<emote>;<target steam id>;<the seq it answers>"
 const SKELETON_PATH = "body/player_body/Armature/Skeleton"
@@ -180,11 +180,17 @@ func _players():
 # w the 0-1 blend; put your own values in p too) and hugs is this node, whose helpers (_pair_frame,
 # _place_body, _reach, _tilt_head, _tilt_head_toward, _player_size, _shoulder_y, _head_y, _hearts,
 # _game_sound, _facing, _flat) can be used for the pose.
-#   def = {"label": "Fist bump", "ask": "wants a fist bump!", "answer": "Bump", "time": 2.0,
+#   def = {"label": "Hold hands", "ask": "wants to hold hands!", "answer": "Hold", "time": 0.0, "move_limit": 0.4,
 #          "node": <object>, "method": "pose_fist_bump",
 #          "needs": "<lobby member data key a player must have for the emote to be offered, or empty>",
 #          "bones": ["extra bone names your pose overrides and that must be reset at the end"]}
+# "time" is how many seconds it lasts, 0 = until one of them walks away; "move_limit" is how far (metres) either
+# may move from where it started before it ends (default 0.6). API version 2 added the 0 and move_limit.
 # Returns true when registered. Emotes only ever run if both players have registered the same id.
+func api_version():
+	return API_VERSION
+
+
 func register_emote(id, def):
 	id = str(id)
 	if not _valid_id(id) or EMOTES.has(id) or typeof(def) != TYPE_DICTIONARY:
@@ -197,7 +203,8 @@ func register_emote(id, def):
 		"label": str(def.get("label", id)).left(24),
 		"ask": str(def.get("ask", "wants to do something with you!")).left(60),
 		"answer": str(def.get("answer", "Join")).left(20),
-		"time": clamp(float(def.get("time", 3.0)), 0.5, 20.0),
+		"time": 0.0 if float(def.get("time", 3.0)) <= 0.0 else clamp(float(def.get("time", 3.0)), 0.5, 600.0),
+		"move_limit": clamp(float(def.get("move_limit", MOVE_LIMIT)), 0.1, 3.0),
 		"node": node, "method": method,
 		"needs": str(def.get("needs", "")).left(64),
 		"bones": def.get("bones", []) if typeof(def.get("bones", [])) == TYPE_ARRAY else [],
@@ -559,8 +566,9 @@ func _update_pairs(players, me, delta):
 		p["t"] += delta
 		var gone = not is_instance_valid(p["pa"]) or not is_instance_valid(p["pb"])
 		if not gone and not p["ending"]:
-			var moved = _flat(p["pa"].global_transform.origin - p["start_a"]).length() > MOVE_LIMIT \
-				or _flat(p["pb"].global_transform.origin - p["start_b"]).length() > MOVE_LIMIT
+			var limit = _move_limit_of(p["emote"])
+			var moved = _flat(p["pa"].global_transform.origin - p["start_a"]).length() > limit \
+				or _flat(p["pb"].global_transform.origin - p["start_b"]).length() > limit
 			if moved or p["t"] > _time_of(p["emote"]) or not wanted.has(key) and p["t"] > 1.0:
 				p["ending"] = true
 				if p["a"] == me or p["b"] == me:
@@ -579,7 +587,14 @@ func _update_pairs(players, me, delta):
 
 func _time_of(kind):
 	var e = _emote(kind)
-	return e["time"] if e != null else 0.0
+	if e == null:
+		return 0.0
+	return e["time"] if e["time"] > 0.0 else 1.0e9   # 0 = until they walk away
+
+
+func _move_limit_of(kind):
+	var e = _emote(kind)
+	return e.get("move_limit", MOVE_LIMIT) if e != null else MOVE_LIMIT
 
 
 # the pose of a running emote: a built-in one here, an addon's through the method it registered

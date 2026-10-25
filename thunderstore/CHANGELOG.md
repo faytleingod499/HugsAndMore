@@ -1,3 +1,7 @@
+## 1.3.1
+- Addon emotes can now last until the two walk away (no time limit) and choose how far they may move before it ends.
+  Needed by Alternate Poses 1.1.0 (holding hands). The built-in hug, high five and kiss are unchanged.
+
 ## 1.3.0
 - Other mods can add emotes to the F menu now (the first one is the addon Alternate Poses). Nothing changes for you
   without such an addon: the hug, high five and kiss work exactly as before.

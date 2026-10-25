@@ -24,7 +24,7 @@ small one's high five.
 
 ## Addons
 
-Other mods can add emotes to the same menu, like [Alternate Poses](https://thunderstore.io/c/webfishing/p/Fayt/Alternate_Poses/)
+Other mods can add emotes to the same menu, like [Alternate Poses](https://thunderstore.io/c/webfishing/p/EthersWolfPark/Alternate_Poses/)
 (side hug, hold hands, twirl, bow). Those are only offered to players who have the addon too.
 
 ## Multiplayer
